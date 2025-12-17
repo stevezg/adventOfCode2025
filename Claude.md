@@ -15,31 +15,40 @@ Day[N]/
 └── solution2.py       # Solution for Part 2
 ```
 
+Sometimes the problems are pretty similar with part 1 and 2, so in that case please see how we can modify the original implementation to work for part 2.
+
 ### Naming Conventions
 
 Some directories include descriptive names:
+
 - `Day 1 Secret Entrance/` - Day 1 challenge
 - `Day 2 Gift Shop/` - Day 2 challenge
 - `Day3/`, `Day4/`, `Day5/`, `Day6/` - Days 3-6 challenges
 
 Alternate file names may appear in older days:
+
 - `answer.py`, `answer1.py`, `answer2.py` - Alternative naming for solutions
 - `soltuon2.py` - Typo variant of solution2.py
 
 ## File Descriptions
 
 ### question.md / question2.md
+
 Contains the full problem statement from Advent of Code, including:
+
 - Story/context
 - Problem requirements
 - Example input/output
 - Expected behavior
 
 ### input.md
+
 Your personalized puzzle input from Advent of Code. This data is unique to each user and is required to solve the challenge.
 
 ### solution.py / solution2.py
+
 Python implementations that:
+
 1. Parse the puzzle input
 2. Implement the algorithm to solve the problem
 3. Output the answer
@@ -55,6 +64,7 @@ python solution.py
 ```
 
 Most solutions will:
+
 1. Test against the example input from the problem
 2. Then attempt to solve using the actual input from `input.md`
 
@@ -72,3 +82,4 @@ Most solutions will:
 - Each solution is self-contained within its day's directory
 - Input files use `.md` extension for easy viewing and editing
 - Solutions typically include validation against example inputs before running on actual puzzle input
+- Try to apporach from learning perspective. first try a brute force solution, then lets see if we can optimize. lets discuss tradeoffs, algorithims, how to approach this problem in english, then lets solve it. act like algorithims teacher and computer science pro.

@@ -144,36 +144,31 @@ def solve_problem_part2(problem_lines):
     if not problem_lines:
         return 0
 
-    # Get the width (number of columns in this problem)
+    # Get the width (number of columns in this problem) and number of rows
     width = len(problem_lines[0]) if problem_lines else 0
+    num_rows = len(problem_lines)
+
+    # The operator is in the last row
+    operator = None
+    last_row = problem_lines[-1] if problem_lines else ""
+    for char in last_row:
+        if char in ['+', '*']:
+            operator = char
+            break
 
     # Extract numbers by reading columns right-to-left
+    # EXCLUDE the last row (operator row) when reading digits
     numbers = []
-    operator = None
 
     # Process columns from right to left
     for col_idx in range(width - 1, -1, -1):
-        column_chars = []
-        for row in problem_lines:
-            if col_idx < len(row):
-                char = row[col_idx]
-                column_chars.append(char)
-
-        # Check if this column contains the operator
-        operator_chars = ['+', '*']
-        has_operator = any(c in operator_chars for c in column_chars)
-
-        if has_operator:
-            for c in column_chars:
-                if c in operator_chars:
-                    operator = c
-                    break
-
-        # Build number from this column (top to bottom, ignoring spaces and operators)
+        # Build number from this column, excluding the operator row
         number_str = ''
-        for char in column_chars:
-            if char.isdigit():
-                number_str += char
+        for row_idx in range(num_rows - 1):  # Exclude last row
+            if col_idx < len(problem_lines[row_idx]):
+                char = problem_lines[row_idx][col_idx]
+                if char.isdigit():
+                    number_str += char
 
         if number_str:
             numbers.append(int(number_str))

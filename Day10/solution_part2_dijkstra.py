@@ -4,6 +4,13 @@ import sys
 from typing import List, Tuple
 import heapq
 
+try:
+    from ortools.linear_solver import pywraplp
+    HAS_ORTOOLS = True
+except ImportError:
+    HAS_ORTOOLS = False
+    print("Warning: OR-Tools not available, falling back to Dijkstra method")
+
 def parse_machine_part2(line: str) -> Tuple[List[List[int]], List[int]]:
     """Parse a single machine line for Part 2 - extract buttons and joltage targets."""
     # Split the line into parts
@@ -35,8 +42,49 @@ def parse_machine_part2(line: str) -> Tuple[List[List[int]], List[int]]:
 
     return buttons, targets
 
+def solve_machine_ilp(buttons: List[List[int]], targets: List[int]) -> int:
+    """Solve using Integer Linear Programming with OR-Tools."""
+    if not HAS_ORTOOLS:
+        return solve_machine_part2_dijkstra(buttons, targets)
+
+    n = len(targets)  # number of counters
+    m = len(buttons)  # number of buttons
+
+    # Create solver
+    solver = pywraplp.Solver.CreateSolver('SCIP')
+    if not solver:
+        # Fallback to CBC if SCIP is not available
+        solver = pywraplp.Solver.CreateSolver('CBC')
+        if not solver:
+            print("Warning: No ILP solver available, using Dijkstra method")
+            return solve_machine_part2_dijkstra(buttons, targets)
+
+    # Create variables: x[j] = number of times to press button j
+    x = [solver.IntVar(0, solver.infinity(), f'x_{j}') for j in range(m)]
+
+    # Add constraints: for each counter i, sum(button_j affects i) * x_j = targets[i]
+    for i in range(n):
+        constraint = solver.Constraint(targets[i], targets[i])
+        for j, button in enumerate(buttons):
+            if i in button:
+                constraint.SetCoefficient(x[j], 1)
+
+    # Objective: minimize total presses
+    objective = solver.Objective()
+    for j in range(m):
+        objective.SetCoefficient(x[j], 1)
+    objective.SetMinimization()
+
+    # Solve
+    status = solver.Solve()
+
+    if status == pywraplp.Solver.OPTIMAL:
+        return int(solver.Objective().Value())
+    else:
+        return -1  # No solution found
+
 def solve_machine_part2_dijkstra(buttons: List[List[int]], targets: List[int]) -> int:
-    """Solve for minimum button presses for Part 2 using Dijkstra (priority queue)."""
+    """Solve for minimum button presses for Part 2 using Dijkstra (priority queue) - fallback."""
     n = len(targets)  # number of counters
     m = len(buttons)  # number of buttons
 
@@ -98,7 +146,7 @@ def main():
             continue
 
         buttons, targets = parse_machine_part2(line)
-        min_presses = solve_machine_part2_dijkstra(buttons, targets)
+        min_presses = solve_machine_ilp(buttons, targets)
         total_presses += min_presses
         print(f"Machine {len(targets)} counters, {len(buttons)} buttons: {min_presses} presses")
 

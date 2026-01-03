@@ -2,11 +2,18 @@
 """
 Day 10 Part 2: Factory - Joltage Configuration
 Find minimum button presses to reach target joltage levels.
-Uses branch-and-bound DFS for memory efficiency (O(depth) instead of O(states)).
+Uses Integer Linear Programming for optimal performance on large inputs.
 """
 
 import sys
 from typing import List, Tuple
+
+try:
+    from ortools.linear_solver import pywraplp
+    HAS_ORTOOLS = True
+except ImportError:
+    HAS_ORTOOLS = False
+    print("Warning: OR-Tools not available, falling back to DFS method")
 
 
 def parse_line(line: str) -> Tuple[List[List[int]], List[int]]:
@@ -26,26 +33,63 @@ def parse_line(line: str) -> Tuple[List[List[int]], List[int]]:
     return buttons, joltage_targets
 
 
-def solve_part2(buttons: List[List[int]], targets: List[int]) -> int:
-    """Solve Part 2 using branch-and-bound DFS.
-    
-    This uses O(depth) memory instead of storing all visited states.
-    Uses aggressive pruning based on lower bounds.
-    """
+def solve_part2_ilp(buttons: List[List[int]], targets: List[int]) -> int:
+    """Solve Part 2 using Integer Linear Programming with OR-Tools."""
+    if not HAS_ORTOOLS:
+        return solve_part2_dfs(buttons, targets)
+
+    n = len(targets)  # number of counters
+    m = len(buttons)  # number of buttons
+
+    # Create solver
+    solver = pywraplp.Solver.CreateSolver('SCIP')
+    if not solver:
+        # Fallback to CBC if SCIP is not available
+        solver = pywraplp.Solver.CreateSolver('CBC')
+        if not solver:
+            print("Warning: No ILP solver available, using DFS method")
+            return solve_part2_dfs(buttons, targets)
+
+    # Create variables: x[j] = number of times to press button j
+    x = [solver.IntVar(0, solver.infinity(), f'x_{j}') for j in range(m)]
+
+    # Add constraints: for each counter i, sum(button_j affects i) * x_j = targets[i]
+    for i in range(n):
+        constraint = solver.Constraint(targets[i], targets[i])
+        for j, button in enumerate(buttons):
+            if i in button:
+                constraint.SetCoefficient(x[j], 1)
+
+    # Objective: minimize total presses
+    objective = solver.Objective()
+    for j in range(m):
+        objective.SetCoefficient(x[j], 1)
+    objective.SetMinimization()
+
+    # Solve
+    status = solver.Solve()
+
+    if status == pywraplp.Solver.OPTIMAL:
+        return int(solver.Objective().Value())
+    else:
+        return -1  # No solution found
+
+def solve_part2_dfs(buttons: List[List[int]], targets: List[int]) -> int:
+    """Solve Part 2 using branch-and-bound DFS (fallback method)."""
     n = len(targets)
-    
+
     # Build max_affects: max number of buttons affecting each counter
     max_affects = [0] * n
     for button in buttons:
         for counter_idx in button:
             if counter_idx < n:
                 max_affects[counter_idx] += 1
-    
+
     # Check if solution is possible
     for i in range(n):
         if targets[i] > 0 and max_affects[i] == 0:
             return -1
-    
+
     def lower_bound(state: List[int]) -> int:
         """Calculate lower bound on remaining presses needed."""
         lb = 0
@@ -57,29 +101,28 @@ def solve_part2(buttons: List[List[int]], targets: List[int]) -> int:
                 # Need at least ceil(remaining / max_affects[i]) presses
                 lb = max(lb, (remaining + max_affects[i] - 1) // max_affects[i])
         return lb
-    
+
     best_cost = float('inf')
-    
+
     def dfs(state: List[int], cost: int):
         """DFS with branch-and-bound pruning."""
         nonlocal best_cost
-        
+
         # Check if we've reached the target
         if state == targets:
             best_cost = min(best_cost, cost)
             return
-        
+
         # Prune if we can't improve
         if cost >= best_cost:
             return
-        
+
         # Calculate lower bound for remaining
         remaining_lb = lower_bound(state)
         if cost + remaining_lb >= best_cost:
             return
-        
+
         # Try each button (prioritize buttons that help most)
-        # Sort by how much they help (affect counters that are furthest from target)
         button_scores = []
         for j, button in enumerate(buttons):
             score = 0
@@ -89,13 +132,13 @@ def solve_part2(buttons: List[List[int]], targets: List[int]) -> int:
                     if remaining > 0:
                         score += remaining
             button_scores.append((score, j))
-        
+
         button_order = [j for _, j in sorted(button_scores, reverse=True)]
-        
+
         for j in button_order:
             new_state = state[:]
             valid = True
-            
+
             # Apply button press
             for counter_idx in buttons[j]:
                 if counter_idx < n:
@@ -103,18 +146,22 @@ def solve_part2(buttons: List[List[int]], targets: List[int]) -> int:
                     if new_state[counter_idx] > targets[counter_idx]:
                         valid = False
                         break
-            
+
             if not valid:
                 continue
-            
+
             # Recursively explore
             dfs(new_state, cost + 1)
-    
+
     # Start DFS from initial state
     initial_state = [0] * n
     dfs(initial_state, 0)
-    
+
     return int(best_cost) if best_cost != float('inf') else -1
+
+def solve_part2(buttons: List[List[int]], targets: List[int]) -> int:
+    """Main solve function - uses ILP by default, falls back to DFS."""
+    return solve_part2_ilp(buttons, targets)
 
 
 def main():

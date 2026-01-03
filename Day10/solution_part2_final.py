@@ -3,6 +3,13 @@
 import sys
 from typing import List, Tuple, Optional
 
+try:
+    from ortools.linear_solver import pywraplp
+    HAS_ORTOOLS = True
+except ImportError:
+    HAS_ORTOOLS = False
+    print("Warning: OR-Tools not available, falling back to branch-and-bound/BFS methods")
+
 def parse_machine_part2(line: str) -> Tuple[List[List[int]], List[int]]:
     """Parse a single machine line for Part 2 - extract buttons and joltage targets."""
     parts = line.strip().split()
@@ -32,6 +39,58 @@ def parse_machine_part2(line: str) -> Tuple[List[List[int]], List[int]]:
     targets = [int(x) for x in joltage_str.split(',')]
     
     return buttons, targets
+
+def solve_machine_ilp(buttons: List[List[int]], targets: List[int]) -> int:
+    """Solve using Integer Linear Programming with OR-Tools."""
+    if not HAS_ORTOOLS:
+        return solve_machine_part2_fallback(buttons, targets)
+
+    n = len(targets)  # number of counters
+    m = len(buttons)  # number of buttons
+
+    # Create solver
+    solver = pywraplp.Solver.CreateSolver('SCIP')
+    if not solver:
+        # Fallback to CBC if SCIP is not available
+        solver = pywraplp.Solver.CreateSolver('CBC')
+        if not solver:
+            print("Warning: No ILP solver available, using branch-and-bound/BFS methods")
+            return solve_machine_part2_fallback(buttons, targets)
+
+    # Create variables: x[j] = number of times to press button j
+    x = [solver.IntVar(0, solver.infinity(), f'x_{j}') for j in range(m)]
+
+    # Add constraints: for each counter i, sum(button_j affects i) * x_j = targets[i]
+    for i in range(n):
+        constraint = solver.Constraint(targets[i], targets[i])
+        for j, button in enumerate(buttons):
+            if i in button:
+                constraint.SetCoefficient(x[j], 1)
+
+    # Objective: minimize total presses
+    objective = solver.Objective()
+    for j in range(m):
+        objective.SetCoefficient(x[j], 1)
+    objective.SetMinimization()
+
+    # Solve
+    status = solver.Solve()
+
+    if status == pywraplp.Solver.OPTIMAL:
+        return int(solver.Objective().Value())
+    else:
+        return -1  # No solution found
+
+def solve_machine_part2_fallback(buttons: List[List[int]], targets: List[int]) -> int:
+    """Fallback solver - try branch and bound first, fallback to optimized BFS."""
+    # Try branch and bound first (better for large problems)
+    result = solve_machine_branch_bound(buttons, targets)
+
+    # If branch and bound fails or is too slow, fallback to optimized BFS
+    if result == -1:
+        result = solve_machine_optimized_bfs(buttons, targets)
+
+    return result
 
 def solve_machine_branch_bound(buttons: List[List[int]], targets: List[int]) -> int:
     """Solve using branch-and-bound algorithm.
@@ -174,15 +233,8 @@ def solve_machine_optimized_bfs(buttons: List[List[int]], targets: List[int]) ->
     return -1  # No solution found
 
 def solve_machine_part2(buttons: List[List[int]], targets: List[int]) -> int:
-    """Main solver - try branch and bound first, fallback to optimized BFS."""
-    # Try branch and bound first (better for large problems)
-    result = solve_machine_branch_bound(buttons, targets)
-    
-    # If branch and bound fails or is too slow, fallback to optimized BFS
-    if result == -1:
-        result = solve_machine_optimized_bfs(buttons, targets)
-    
-    return result
+    """Main solver - uses ILP by default, falls back to branch-and-bound/BFS."""
+    return solve_machine_ilp(buttons, targets)
 
 def main():
     if len(sys.argv) > 1:
